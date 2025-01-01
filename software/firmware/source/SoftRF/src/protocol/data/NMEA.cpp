@@ -142,6 +142,21 @@ void NMEA_add_checksum(char *buf, size_t limit)
   char *csum_ptr = buf + sentence_size;
   snprintf_P(csum_ptr, limit, PSTR("%02X\r\n"), cs);
 }
+float voltageToPercentage(float voltage) {
+  float minVoltage = 3.0;
+  float maxVoltage = 4.2;
+
+    // Ensure the voltage is within the expected range
+    if (voltage < minVoltage) {
+        voltage = minVoltage;
+    } else if (voltage > maxVoltage) {
+        voltage = maxVoltage;
+    }
+
+    // Calculate the percentage
+    int percentage = ((voltage - minVoltage) / (maxVoltage - minVoltage)) * 100 + 1000;
+    return percentage;
+}
 
 void NMEA_setup()
 {
@@ -557,9 +572,10 @@ void NMEA_Export()
       NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_SOFTRF_HEARTBEAT) //changed to LK8EX1,pressure,altitude,vario,temperature,battery,*checksum
+      int volt_percentage = voltageToPercentage(voltage);
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$LK8EX1,999999,99999,9999,99,%.2f*"),
-              (float)(voltage));
+              PSTR("$LK8EX1,999999,99999,9999,99,%d*"),
+              (volt_percentage));
       // snprintf_P(NMEABuffer, sizeof(NMEABuffer),
       //         PSTR("$PSRFH,%06X,%d,%d,%d,%d*"),
       //         ThisAircraft.addr,settings->rf_protocol,
