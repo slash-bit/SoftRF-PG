@@ -556,11 +556,14 @@ void NMEA_Export()
 
       NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
-#if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
+#if !defined(EXCLUDE_SOFTRF_HEARTBEAT) //changed to LK8EX1,pressure,altitude,vario,temperature,battery,*checksum
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PSRFH,%06X,%d,%d,%d,%d*"),
-              ThisAircraft.addr,settings->rf_protocol,
-              rx_packets_counter,tx_packets_counter,(int)(voltage*100));
+              PSTR("$LK8EX1,999999,99999,9999,99,%.2f*"),
+              (float)(voltage));
+      // snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+      //         PSTR("$PSRFH,%06X,%d,%d,%d,%d*"),
+      //         ThisAircraft.addr,settings->rf_protocol,
+      //         rx_packets_counter,tx_packets_counter,(int)(voltage*100));
 
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
