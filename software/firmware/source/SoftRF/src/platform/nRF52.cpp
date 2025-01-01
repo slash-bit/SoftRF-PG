@@ -2221,6 +2221,19 @@ static void nRF52_Sound_test(int var)
   }
 #endif /* USE_PWM_SOUND */
 }
+static void nRF52_BuzzerSound(boolean on)
+{
+  #if defined(USE_PWM_SOUND)
+  if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && on) {
+    tone(SOC_GPIO_PIN_BUZZER, 640,  500); delay(500);
+    tone(SOC_GPIO_PIN_BUZZER, 840,  500); delay(500);
+  }
+  else if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && !on) {
+    tone(SOC_GPIO_PIN_BUZZER, 840,  500); delay(500);
+    tone(SOC_GPIO_PIN_BUZZER, 640,  500); delay(500);
+  }
+#endif /* USE_PWM_SOUND */
+}
 
 #if defined(USE_BLE_MIDI)
 extern BLEMidi blemidi;
@@ -3222,10 +3235,17 @@ void handleEvent(AceButton* button, uint8_t eventType,
       break;
     case AceButton::kEventDoubleClicked:
 #if defined(USE_EPAPER)
-      if (button == &button_1) {
-//        Serial.println(F("kEventDoubleClicked."));
-        digitalWrite(SOC_GPIO_PIN_EPD_BLGT,
-                     digitalRead(SOC_GPIO_PIN_EPD_BLGT) == LOW);
+    if (button == &button_1) {
+      Serial.println(F("kEventDoubleClicked."));
+      digitalWrite(SOC_GPIO_PIN_EPD_BLGT,
+                    digitalRead(SOC_GPIO_PIN_EPD_BLGT) == LOW);
+      if (settings->volume == BUZZER_OFF) {
+        nRF52_BuzzerSound(true);
+        settings->volume = BUZZER_VOLUME_FULL;
+      } else {
+          nRF52_BuzzerSound(false);
+          settings->volume = BUZZER_OFF;
+        }
       }
 #endif
       break;

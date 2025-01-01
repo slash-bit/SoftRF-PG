@@ -254,7 +254,7 @@ struct rst_info {
 //#define USE_GDL90_MSL
 //#define USE_IBEACON
 //#define EXCLUDE_NUS
-//#define EXCLUDE_IMU
+#define EXCLUDE_IMU
 #define USE_OGN_ENCRYPTION
 #define ENABLE_ADSL
 #define ENABLE_PROL
