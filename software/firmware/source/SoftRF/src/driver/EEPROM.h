@@ -98,5 +98,6 @@ void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);
 extern settings_t *settings;
+void save_changes(int prot);
 
 #endif /* EEPROMHELPER_H */

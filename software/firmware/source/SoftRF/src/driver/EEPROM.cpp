@@ -163,12 +163,14 @@ void EEPROM_defaults()
 void EEPROM_store()
 {
   for (int i=0; i<sizeof(eeprom_t); i++) {
+    Serial.println("Writing EEPROM...");
+    // Serial.println(eeprom_block.raw[i]);
     EEPROM.write(i, eeprom_block.raw[i]);
   }
 
   SoC->EEPROM_extension(EEPROM_EXT_STORE);
 
-  EEPROM_commit();
+  // EEPROM_commit();
 }
 
 #endif /* EXCLUDE_EEPROM */

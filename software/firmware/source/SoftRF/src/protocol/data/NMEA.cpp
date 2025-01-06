@@ -35,6 +35,7 @@ WiFiServer *NmeaTCPServer = NULL;
 NmeaTCP_t NmeaTCP[MAX_NMEATCP_CLIENTS];
 #endif
 
+unsigned long NmeaBatteryTime       = 0;
 char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
 
 static char NMEA_Callsign[NMEA_CALLSIGN_SIZE];
@@ -572,10 +573,12 @@ void NMEA_Export()
       NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_SOFTRF_HEARTBEAT) //changed to LK8EX1,pressure,altitude,vario,temperature,battery,*checksum
-      int volt_percentage = voltageToPercentage(voltage);
+      if (isTimeToNmeaBattery()) {
+      int volt_percentage = Battery_charge() + 1000;
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$LK8EX1,999999,99999,9999,99,%d*"),
               (volt_percentage));
+      NmeaBatteryTime = millis();
       // snprintf_P(NMEABuffer, sizeof(NMEABuffer),
       //         PSTR("$PSRFH,%06X,%d,%d,%d,%d*"),
       //         ThisAircraft.addr,settings->rf_protocol,
@@ -584,6 +587,7 @@ void NMEA_Export()
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
       NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      }
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
     }
 }

@@ -45,6 +45,8 @@ enum
 #define PSKVC_VERSION       1
 #define MAX_PSKVC_LEN       64
 
+#define isTimeToNmeaBattery()         (millis() - NmeaBatteryTime > 10000) //interval between heartbeats in seconds
+
 void NMEA_setup(void);
 void NMEA_loop(void);
 void NMEA_fini();
