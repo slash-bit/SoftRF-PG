@@ -103,10 +103,24 @@ byte RF_setup(void)
     if (false) {
 #endif /* EXCLUDE_SX12XX */
 #if defined(USE_RADIOLIB)
+#if !defined(EXCLUDE_LR11XX)
     } else if (lr1110_ops.probe()) {
       rf_chip = &lr1110_ops;
     } else if (lr1121_ops.probe()) {
       rf_chip = &lr1121_ops;
+#endif /* EXCLUDE_LR11XX */
+#if !defined(EXCLUDE_CC1101)
+    } else if (cc1101_ops.probe()) {
+      rf_chip = &cc1101_ops;
+#endif /* EXCLUDE_CC1101 */
+#if !defined(EXCLUDE_SX1231)
+    } else if (sx1231_ops.probe()) {
+      rf_chip = &sx1231_ops;
+#endif /* EXCLUDE_SX1231 */
+#if !defined(EXCLUDE_SI443X)
+    } else if (si4432_ops.probe()) {
+      rf_chip = &si4432_ops;
+#endif /* EXCLUDE_SI443X */
 #endif /* USE_RADIOLIB */
 #if !defined(EXCLUDE_NRF905)
     } else if (nrf905_ops.probe()) {

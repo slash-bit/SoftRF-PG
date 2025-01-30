@@ -25,60 +25,13 @@
 
 #include <manchester.h>
 
-extern size_t RF_tx_size;
-
-static bool lr1110_probe(void);
-static bool lr1121_probe(void);
-static void lr11xx_setup(void);
-static void lr11xx_channel(int8_t);
-static bool lr11xx_receive(void);
-static bool lr11xx_transmit(void);
-static void lr11xx_shutdown(void);
-
-const rfchip_ops_t lr1110_ops = {
-  RF_IC_LR1110,
-  "LR1110",
-  lr1110_probe,
-  lr11xx_setup,
-  lr11xx_channel,
-  lr11xx_receive,
-  lr11xx_transmit,
-  lr11xx_shutdown
-};
-
-const rfchip_ops_t lr1121_ops = {
-  RF_IC_LR1121,
-  "LR1121",
-  lr1121_probe,
-  lr11xx_setup,
-  lr11xx_channel,
-  lr11xx_receive,
-  lr11xx_transmit,
-  lr11xx_shutdown
-};
-
-#define USE_SX1262      0
-#define USE_LR11XX      1
-
 #ifndef RadioSPI
 #define RadioSPI        SPI
 #endif
 
-Module  *mod;
-#if USE_SX1262
-SX1262  *radio;
-#elif USE_LR11XX
-LR11x0  *radio;
-#endif
+Module *mod;
 
-const rf_proto_desc_t  *rl_protocol  = &ogntp_proto_desc;
-
-static int8_t lr112x_channel_prev    = (int8_t) -1;
-
-static volatile bool lr112x_receive_complete = false;
-
-static bool lr112x_receive_active    = false;
-static bool lr112x_transmit_complete = false;
+const rf_proto_desc_t *rl_protocol = &ogntp_proto_desc;
 
 #define RADIOLIB_MAX_DATA_LENGTH    128
 
@@ -90,6 +43,8 @@ typedef struct
 
 RadioLib_DataPacket txPacket;
 RadioLib_DataPacket rxPacket;
+
+extern size_t RF_tx_size;
 
 #if !defined(USE_BASICMAC)
 static const SPISettings probe_settings(1000000UL, MSBFIRST, SPI_MODE0);
@@ -129,6 +84,73 @@ static void hal_pin_busy_wait (void) {
     }
 }
 #endif /* USE_BASICMAC */
+
+static bool memeqzero(const uint8_t *data, size_t length)
+{
+	const uint8_t *p = data;
+	size_t len;
+
+	/* Check first 16 bytes manually */
+	for (len = 0; len < 16; len++) {
+		if (!length)
+			return true;
+		if (*p)
+			return false;
+		p++;
+		length--;
+	}
+
+	/* Now we know that's zero, memcmp with self. */
+	return memcmp((void *) data, (void *) p, length) == 0;
+}
+
+#if !defined(EXCLUDE_LR11XX)
+
+static bool lr1110_probe(void);
+static bool lr1121_probe(void);
+static void lr11xx_setup(void);
+static void lr11xx_channel(int8_t);
+static bool lr11xx_receive(void);
+static bool lr11xx_transmit(void);
+static void lr11xx_shutdown(void);
+
+const rfchip_ops_t lr1110_ops = {
+  RF_IC_LR1110,
+  "LR1110",
+  lr1110_probe,
+  lr11xx_setup,
+  lr11xx_channel,
+  lr11xx_receive,
+  lr11xx_transmit,
+  lr11xx_shutdown
+};
+
+const rfchip_ops_t lr1121_ops = {
+  RF_IC_LR1121,
+  "LR1121",
+  lr1121_probe,
+  lr11xx_setup,
+  lr11xx_channel,
+  lr11xx_receive,
+  lr11xx_transmit,
+  lr11xx_shutdown
+};
+
+#define USE_SX1262      0
+#define USE_LR11XX      1
+
+#if USE_SX1262
+SX1262  *radio_semtech;
+#elif USE_LR11XX
+LR11x0  *radio_semtech;
+#endif
+
+static int8_t lr112x_channel_prev    = (int8_t) -1;
+
+static volatile bool lr112x_receive_complete = false;
+
+static bool lr112x_receive_active    = false;
+static bool lr112x_transmit_complete = false;
 
 #if USE_SX1262
 
@@ -188,6 +210,33 @@ static void lr11xx_GetVersion (uint8_t* hw, uint8_t* device,
     Serial.print("minor  = "); Serial.println(*minor, HEX);
 #endif
 }
+
+static void lr11xx_GetChipEui (uint64_t* eui) {
+    uint8_t buf[8] = { 0 };
+
+    hal_pin_busy_wait();
+    hal_spi_select(1);
+
+    hal_spi((uint8_t)((RADIOLIB_LR11X0_CMD_GET_CHIP_EUI & 0xFF00) >> 8));
+    hal_spi((uint8_t) (RADIOLIB_LR11X0_CMD_GET_CHIP_EUI & 0x00FF));
+    hal_spi_select(0);
+
+    hal_pin_busy_wait();
+    hal_spi_select(1);
+
+    hal_spi(RADIOLIB_LR11X0_CMD_NOP);
+    for (uint8_t i = 0; i < sizeof(buf); i++) {
+        buf[i] = hal_spi(0x00);
+    }
+    hal_spi_select(0);
+
+    if (eui) { memcpy(eui, buf, sizeof(buf)); }
+#if 0
+    Serial.print("eui = "); Serial.println(*eui, HEX);
+#endif
+}
+
+static uint64_t lr11xx_eui_be = 0xdeadbeefdeadbeef;
 
 static const uint32_t rfswitch_dio_pins_hpdtek[] = {
     RADIOLIB_LR11X0_DIO5, RADIOLIB_LR11X0_DIO6,
@@ -327,7 +376,7 @@ static bool lr1121_probe()
   u1_t fanet_sw_lsb = ((fanet_proto_desc.syncword[0]  & 0x0F) << 4) | 0x04;
   if (v == SX126X_DEF_LORASYNCWORDLSB || v == fanet_sw_lsb) {
 
-    if (v_reset == SX126X_DEF_LORASYNCWORDLSB || v == fanet_sw_lsb) {
+    if (v_reset == SX126X_DEF_LORASYNCWORDLSB || v_reset == fanet_sw_lsb) {
       RF_SX12XX_RST_is_connected = false;
     }
 
@@ -355,6 +404,10 @@ static bool lr1121_probe()
   hal_waitUntil(os_getTime()+ms2osticks(300)); // wait 300 ms
 
   lr11xx_GetVersion(&hw, &device, &major, &minor);
+
+  if (device != 0x00 && device != 0xFF) {
+    lr11xx_GetChipEui(&lr11xx_eui_be);
+  }
 
   pinMode(lmic_pins.nss, INPUT);
   RadioSPI.end();
@@ -391,7 +444,7 @@ static void lr11xx_channel(int8_t channel)
       frequency -= (frequency % nrf_freq_resolution);
     }
 
-    int state = radio->setFrequency(frequency / 1000000.0);
+    int state = radio_semtech->setFrequency(frequency / 1000000.0);
 
     lr112x_channel_prev = channel;
     /* restart Rx upon a channel switch */
@@ -412,17 +465,17 @@ static void lr11xx_setup()
 
   mod   = new Module(lmic_pins.nss, irq, lmic_pins.rst, busy, RadioSPI);
 #if USE_SX1262
-  radio = new SX1262(mod);
+  radio_semtech = new SX1262(mod);
 #endif
 #if USE_LR11XX
   switch (rf_chip->type)
   {
   case RF_IC_LR1110:
-    radio = new LR1110(mod);
+    radio_semtech = new LR1110(mod);
     break;
   case RF_IC_LR1121:
   default:
-    radio = new LR1121(mod);
+    radio_semtech = new LR1121(mod);
     break;
   }
 #endif
@@ -464,7 +517,7 @@ static void lr11xx_setup()
     protocol_encode = &legacy_encode;
     protocol_decode = &legacy_decode;
     /*
-     * Enforce legacy protocol setting for SX1276
+     * Enforce legacy protocol setting for LR11XX
      * if other value (UAT) left in EEPROM from other (UATM) radio
      */
     settings->rf_protocol = RF_PROTOCOL_LEGACY;
@@ -475,14 +528,20 @@ static void lr11xx_setup()
 
 #if USE_LR11XX
   float Vtcxo;
+  uint64_t eui_le = __builtin_bswap64(lr11xx_eui_be);
 
   switch (hw_info.model)
   {
   case SOFTRF_MODEL_STANDALONE:
   case SOFTRF_MODEL_ACADEMY:
-    // Ebyte E80-900M2213S
-    // LR1121 TCXO Voltage
-    Vtcxo = 1.8;
+    if (eui_le == 0x0016c001f047ac30)
+      // Ebyte E80-900M2213S
+      // LR1121 TCXO Voltage
+      Vtcxo = 1.8;
+    else
+      // HPDTeK HPD-16E
+      // LR1121 TCXO Voltage 2.85~3.15V
+      Vtcxo = 3.0;
     break;
 
   case SOFTRF_MODEL_NEO:
@@ -507,13 +566,17 @@ static void lr11xx_setup()
   {
   case RF_MODULATION_TYPE_LORA:
 #if USE_SX1262
-    state = radio->begin();    // start LoRa mode (and disable FSK)
+    state = radio_semtech->begin();    // start LoRa mode (and disable FSK)
 #endif
 #if USE_LR11XX
 #if RADIOLIB_VERSION_MAJOR == 6
-    state = radio->begin(125.0, 9, 7, RADIOLIB_LR11X0_LORA_SYNC_WORD_PRIVATE, 10, 8, Vtcxo);
+    state = radio_semtech->begin(125.0, 9, 7,
+                                 RADIOLIB_LR11X0_LORA_SYNC_WORD_PRIVATE,
+                                 10, 8, Vtcxo);
 #else
-    state = radio->begin(125.0, 9, 7, RADIOLIB_LR11X0_LORA_SYNC_WORD_PRIVATE, 8, Vtcxo);
+    state = radio_semtech->begin(125.0, 9, 7,
+                                 RADIOLIB_LR11X0_LORA_SYNC_WORD_PRIVATE,
+                                 8, Vtcxo);
 #endif /* RADIOLIB_VERSION_MAJOR */
 #endif
 
@@ -530,22 +593,22 @@ static void lr11xx_setup()
       bw = 250.0; /* BW_250 */
       break;
     }
-    state = radio->setBandwidth(bw);
+    state = radio_semtech->setBandwidth(bw);
 
     switch (rl_protocol->type)
     {
     case RF_PROTOCOL_FANET:
     default:
-      state = radio->setSpreadingFactor(7); /* SF_7 */
-      state = radio->setCodingRate(5);      /* CR_5 */
+      state = radio_semtech->setSpreadingFactor(7); /* SF_7 */
+      state = radio_semtech->setCodingRate(5);      /* CR_5 */
       break;
     }
 
-    state = radio->setSyncWord((uint8_t) rl_protocol->syncword[0]);
+    state = radio_semtech->setSyncWord((uint8_t) rl_protocol->syncword[0]);
 
-    state = radio->setPreambleLength(8);
-    state = radio->explicitHeader();
-    state = radio->setCRC(true);
+    state = radio_semtech->setPreambleLength(8);
+    state = radio_semtech->explicitHeader();
+    state = radio_semtech->setCRC(true);
 
     break;
   case RF_MODULATION_TYPE_2FSK:
@@ -553,13 +616,13 @@ static void lr11xx_setup()
   default:
 
 #if USE_SX1262
-    state = radio->beginFSK(); // start FSK mode (and disable LoRa)
+    state = radio_semtech->beginFSK(); // start FSK mode (and disable LoRa)
 #endif
 #if USE_LR11XX
 #if RADIOLIB_VERSION_MAJOR == 6
-    state = radio->beginGFSK(4.8, 5.0, 156.2, 10, 16, Vtcxo);
+    state = radio_semtech->beginGFSK(4.8, 5.0, 156.2, 10, 16, Vtcxo);
 #else
-    state = radio->beginGFSK(4.8, 5.0, 156.2, 16, Vtcxo);
+    state = radio_semtech->beginGFSK(4.8, 5.0, 156.2, 16, Vtcxo);
 #endif /* RADIOLIB_VERSION_MAJOR */
 #endif
 
@@ -573,7 +636,7 @@ static void lr11xx_setup()
       br = 100.0;
       break;
     }
-    state = radio->setBitRate(br);
+    state = radio_semtech->setBitRate(br);
 
     switch (rl_protocol->deviation)
     {
@@ -592,7 +655,7 @@ static void lr11xx_setup()
       fdev = 50.0;
       break;
     }
-    state = radio->setFrequencyDeviation(fdev);
+    state = radio_semtech->setFrequencyDeviation(fdev);
 
     switch (rl_protocol->bandwidth)
     {
@@ -618,11 +681,11 @@ static void lr11xx_setup()
       bw = 234.3;
       break;
     }
-    state = radio->setRxBandwidth(bw);
+    state = radio_semtech->setRxBandwidth(bw);
 
-    state = radio->setEncoding(RADIOLIB_ENCODING_NRZ);
-    state = radio->setPreambleLength(rl_protocol->preamble_size * 8);
-    state = radio->setDataShaping(RADIOLIB_SHAPING_0_5);
+    state = radio_semtech->setEncoding(RADIOLIB_ENCODING_NRZ);
+    state = radio_semtech->setPreambleLength(rl_protocol->preamble_size * 8);
+    state = radio_semtech->setDataShaping(RADIOLIB_SHAPING_0_5);
 
     switch (rl_protocol->crc_type)
     {
@@ -632,13 +695,13 @@ static void lr11xx_setup()
     case RF_CHECKSUM_TYPE_CRC8_107:
     case RF_CHECKSUM_TYPE_RS:
       /* CRC is driven by software */
-      state = radio->setCRC(0, 0);
+      state = radio_semtech->setCRC(0, 0);
       break;
     case RF_CHECKSUM_TYPE_GALLAGER:
     case RF_CHECKSUM_TYPE_CRC_MODES:
     case RF_CHECKSUM_TYPE_NONE:
     default:
-      state = radio->setCRC(0, 0);
+      state = radio_semtech->setCRC(0, 0);
       break;
     }
 
@@ -656,9 +719,9 @@ static void lr11xx_setup()
     default:
       break;
     }
-    state = radio->fixedPacketLengthMode(pkt_size);
+    state = radio_semtech->fixedPacketLengthMode(pkt_size);
 
-    state = radio->disableAddressFiltering();
+    state = radio_semtech->disableAddressFiltering();
 
     /* Work around premature P3I syncword detection */
     if (rl_protocol->syncword_size == 2) {
@@ -669,10 +732,10 @@ static void lr11xx_setup()
                            rl_protocol->syncword[0],
                            rl_protocol->syncword[1]
                          };
-      state = radio->setSyncWord(sword, 4);
+      state = radio_semtech->setSyncWord(sword, 4);
     } else {
-      state = radio->setSyncWord((uint8_t *) rl_protocol->syncword,
-                                 (size_t)    rl_protocol->syncword_size);
+      state = radio_semtech->setSyncWord((uint8_t *) rl_protocol->syncword,
+                                         (size_t)    rl_protocol->syncword_size);
     }
     break;
   }
@@ -706,18 +769,18 @@ static void lr11xx_setup()
     break;
   }
 
-  state = radio->setOutputPower(txpow);
+  state = radio_semtech->setOutputPower(txpow);
 
 #if USE_SX1262
   uint32_t rxe = lmic_pins.rxe == LMIC_UNUSED_PIN ? RADIOLIB_NC : lmic_pins.rxe;
   uint32_t txe = lmic_pins.txe == LMIC_UNUSED_PIN ? RADIOLIB_NC : lmic_pins.txe;
   if (rxe == RADIOLIB_NC && txe == RADIOLIB_NC) {
-    state = radio->setDio2AsRfSwitch();
+    state = radio_semtech->setDio2AsRfSwitch();
   } else {
-    radio->setRfSwitchPins(rxe, txe);
+    radio_semtech->setRfSwitchPins(rxe, txe);
   }
 
-  state = radio->setCurrentLimit(100.0);
+  state = radio_semtech->setCurrentLimit(100.0);
 #endif
 
 #if USE_LR11XX
@@ -725,53 +788,37 @@ static void lr11xx_setup()
   {
   case SOFTRF_MODEL_CARD:
 #if 1
-    radio->setDioAsRfSwitch(0x0f, 0x0, 0x09, 0x0B, 0x0A, 0x0, 0x4, 0x0);
+    radio_semtech->setDioAsRfSwitch(0x0f, 0x0, 0x09, 0x0B, 0x0A, 0x0, 0x4, 0x0);
 #else
-    radio->setRfSwitchTable(rfswitch_dio_pins_seeed, rfswitch_table_seeed);
+    radio_semtech->setRfSwitchTable(rfswitch_dio_pins_seeed, rfswitch_table_seeed);
 #endif
     break;
 
   case SOFTRF_MODEL_STANDALONE:
   case SOFTRF_MODEL_ACADEMY:
-    /* Ebyte E80-900M2213S */
+    if (eui_le == 0x0016c001f047ac30)
+      /* Ebyte E80-900M2213S */
 #if 1
-    radio->setDioAsRfSwitch(0x07, 0x0, 0x02, 0x03, 0x01, 0x0, 0x4, 0x0);
+      radio_semtech->setDioAsRfSwitch(0x07, 0x0, 0x02, 0x03, 0x01, 0x0, 0x4, 0x0);
 #else
-    radio->setRfSwitchTable(rfswitch_dio_pins_ebyte, rfswitch_table_ebyte);
+      radio_semtech->setRfSwitchTable(rfswitch_dio_pins_ebyte, rfswitch_table_ebyte);
 #endif
+    else
+      radio_semtech->setRfSwitchTable(rfswitch_dio_pins_hpdtek, rfswitch_table_hpdtek);
     break;
 
   case SOFTRF_MODEL_NEO:
   case SOFTRF_MODEL_BADGE:
   case SOFTRF_MODEL_PRIME_MK3:
   default:
-    radio->setRfSwitchTable(rfswitch_dio_pins_hpdtek, rfswitch_table_hpdtek);
+    radio_semtech->setRfSwitchTable(rfswitch_dio_pins_hpdtek, rfswitch_table_hpdtek);
     break;
   }
 #endif
 
-  state = radio->setRxBoostedGainMode(true);
+  state = radio_semtech->setRxBoostedGainMode(true);
 
-  radio->setPacketReceivedAction(lr112x_receive_handler);
-}
-
-static bool memeqzero(const uint8_t *data, size_t length)
-{
-	const uint8_t *p = data;
-	size_t len;
-
-	/* Check first 16 bytes manually */
-	for (len = 0; len < 16; len++) {
-		if (!length)
-			return true;
-		if (*p)
-			return false;
-		p++;
-		length--;
-	}
-
-	/* Now we know that's zero, memcmp with self. */
-	return memcmp((void *) data, (void *) p, length) == 0;
+  radio_semtech->setPacketReceivedAction(lr112x_receive_handler);
 }
 
 static bool lr11xx_receive()
@@ -785,7 +832,7 @@ static bool lr11xx_receive()
 
   if (!lr112x_receive_active) {
 
-    state = radio->startReceive();
+    state = radio_semtech->startReceive();
     if (state == RADIOLIB_ERR_NONE) {
       lr112x_receive_active = true;
     }
@@ -793,7 +840,7 @@ static bool lr11xx_receive()
 
   if (lr112x_receive_complete == true) {
 
-    rxPacket.len = radio->getPacketLength();
+    rxPacket.len = radio_semtech->getPacketLength();
 
     if (rxPacket.len > 0) {
 
@@ -801,7 +848,7 @@ static bool lr11xx_receive()
         rxPacket.len = sizeof(rxPacket.payload);
       }
 
-      state = radio->readData(rxPacket.payload, rxPacket.len);
+      state = radio_semtech->readData(rxPacket.payload, rxPacket.len);
       lr112x_receive_active = false;
 
       if (state == RADIOLIB_ERR_NONE &&
@@ -951,15 +998,15 @@ static bool lr11xx_receive()
         }
 
         if (success) {
-          RF_last_rssi = radio->getRSSI();
+          RF_last_rssi = radio_semtech->getRSSI();
           rx_packets_counter++;
         }
       }
 
       memset(rxPacket.payload, 0, sizeof(rxPacket.payload));
 #if USE_SX1262 && (RADIOLIB_GODMODE || RADIOLIB_LOW_LEVEL)
-      radio->writeBuffer(rxPacket.payload, rxPacket.len);
-      radio->setBufferBaseAddress();
+      radio_semtech->writeBuffer(rxPacket.payload, rxPacket.len);
+      radio_semtech->setBufferBaseAddress();
 #endif
       rxPacket.len = 0;
     }
@@ -1103,7 +1150,7 @@ static bool lr11xx_transmit()
 
   txPacket.len = PayloadLen;
 
-  int state = radio->transmit((uint8_t *) &txPacket.payload, (size_t) txPacket.len);
+  int state = radio_semtech->transmit((uint8_t *) &txPacket.payload, (size_t) txPacket.len);
 
   if (state == RADIOLIB_ERR_NONE) {
 
@@ -1111,9 +1158,9 @@ static bool lr11xx_transmit()
 
     memset(txPacket.payload, 0, sizeof(txPacket.payload));
 #if USE_SX1262 && (RADIOLIB_GODMODE || RADIOLIB_LOW_LEVEL)
-    radio->setBufferBaseAddress();
-    radio->writeBuffer(txPacket.payload, txPacket.len);
-    radio->setBufferBaseAddress();
+    radio_semtech->setBufferBaseAddress();
+    radio_semtech->writeBuffer(txPacket.payload, txPacket.len);
+    radio_semtech->setBufferBaseAddress();
 #endif
 
 #if 0
@@ -1122,7 +1169,7 @@ static bool lr11xx_transmit()
 
     // print measured data rate
     Serial.print(F("[SX1262] Datarate:\t"));
-    Serial.print(radio->getDataRate());
+    Serial.print(radio_semtech->getDataRate());
     Serial.println(F(" bps"));
 
   } else if (state == RADIOLIB_ERR_PACKET_TOO_LONG) {
@@ -1146,16 +1193,966 @@ static bool lr11xx_transmit()
 static void lr11xx_shutdown()
 {
 #if USE_SX1262
-  int state = radio->sleep(false);
+  int state = radio_semtech->sleep(false);
 #endif
 
 #if USE_LR11XX
-  int state = radio->standby(RADIOLIB_LR11X0_STANDBY_RC);
-  state = radio->setTCXO(0);
-  state = radio->sleep(false, 0);
+  int state = radio_semtech->standby(RADIOLIB_LR11X0_STANDBY_RC);
+  state = radio_semtech->setTCXO(0);
+  state = radio_semtech->sleep(false, 0);
 #endif
 
   RadioSPI.end();
 }
+#endif /* EXCLUDE_LR11XX */
+
+#if !defined(EXCLUDE_CC1101)
+
+static bool cc1101_probe(void);
+static void cc1101_setup(void);
+static void cc1101_channel(int8_t);
+static bool cc1101_receive(void);
+static bool cc1101_transmit(void);
+static void cc1101_shutdown(void);
+
+const rfchip_ops_t cc1101_ops = {
+  RF_IC_CC1101,
+  "CC1101",
+  cc1101_probe,
+  cc1101_setup,
+  cc1101_channel,
+  cc1101_receive,
+  cc1101_transmit,
+  cc1101_shutdown
+};
+
+CC1101 *radio_ti;
+
+static bool cc1101_probe()
+{
+  bool success = false;
+
+  return success;
+}
+
+static void cc1101_channel(int8_t channel)
+{
+
+}
+
+static void cc1101_setup()
+{
+
+}
+
+static bool cc1101_receive()
+{
+  return false;
+}
+
+static bool cc1101_transmit()
+{
+  return false;
+}
+
+static void cc1101_shutdown()
+{
+  int state = radio_ti->sleep();
+}
+#endif /* EXCLUDE_CC1101 */
+
+#if !defined(EXCLUDE_SX1231)
+
+static bool sx1231_probe(void);
+static void sx1231_setup(void);
+static void sx1231_channel(int8_t);
+static bool sx1231_receive(void);
+static bool sx1231_transmit(void);
+static void sx1231_shutdown(void);
+
+const rfchip_ops_t sx1231_ops = {
+  RF_IC_SX1231,
+  "SX1231",
+  sx1231_probe,
+  sx1231_setup,
+  sx1231_channel,
+  sx1231_receive,
+  sx1231_transmit,
+  sx1231_shutdown
+};
+
+SX1231 *radio_hoperf;
+
+static int8_t sx1231_channel_prev    = (int8_t) -1;
+
+static volatile bool sx1231_receive_complete = false;
+
+static bool sx1231_receive_active    = false;
+static bool sx1231_transmit_complete = false;
+
+static uint8_t sx1231_chip_rev_cache = (uint8_t) -1;
+
+static u1_t sx1231_readReg (u1_t addr) {
+#if defined(USE_BASICMAC)
+    hal_spi_select(1);
+#else
+    hal_pin_nss(0);
+#endif
+    hal_spi(addr & 0x7F);
+    u1_t val = hal_spi(0x00);
+#if defined(USE_BASICMAC)
+    hal_spi_select(0);
+#else
+    hal_pin_nss(1);
+#endif
+    return val;
+}
+
+// this function is called when a complete packet
+// is received by the module
+// IMPORTANT: this function MUST be 'void' type
+//            and MUST NOT have any arguments!
+#if defined(ESP8266) || defined(ESP32)
+  ICACHE_RAM_ATTR
+#endif
+void sx1231_receive_handler(void) {
+  sx1231_receive_complete = true;
+}
+
+static bool sx1231_probe()
+{
+  u1_t v, v_reset;
+
+  SoC->SPI_begin();
+
+  lmic_hal_init (nullptr);
+
+  // manually reset radio
+  hal_pin_rst(0); // drive RST pin low
+  hal_waitUntil(os_getTime()+ms2osticks(1)); // wait >100us
+
+  v_reset = sx1231_readReg(RADIOLIB_RF69_REG_VERSION);
+
+  hal_pin_rst(2); // configure RST pin floating!
+  hal_waitUntil(os_getTime()+ms2osticks(5)); // wait 5ms
+
+  v = sx1231_readReg(RADIOLIB_RF69_REG_VERSION);
+
+  pinMode(lmic_pins.nss, INPUT);
+  RadioSPI.end();
+
+  if (v == RADIOLIB_SX123X_CHIP_REVISION_2_A ||
+      v == RADIOLIB_SX123X_CHIP_REVISION_2_B ||
+      v == RADIOLIB_SX123X_CHIP_REVISION_2_C ||
+      v == RADIOLIB_SX123X_CHIP_REVISION_2_D) {
+
+    if (v_reset == RADIOLIB_SX123X_CHIP_REVISION_2_A ||
+        v_reset == RADIOLIB_SX123X_CHIP_REVISION_2_B ||
+        v_reset == RADIOLIB_SX123X_CHIP_REVISION_2_C ||
+        v_reset == RADIOLIB_SX123X_CHIP_REVISION_2_D) {
+      RF_SX12XX_RST_is_connected = false;
+    }
+
+    sx1231_chip_rev_cache = v;
+
+    return true;
+  } else {
+    return false;
+  }
+}
+
+static void sx1231_channel(int8_t channel)
+{
+  if (channel != -1 && channel != sx1231_channel_prev) {
+    uint32_t frequency = RF_FreqPlan.getChanFrequency((uint8_t) channel);
+
+    if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {
+      nRF905_band_t nrf_band;
+      uint32_t nrf_freq_resolution;
+
+      nrf_band = (frequency >= 844800000UL ? NRF905_BAND_868 : NRF905_BAND_433);
+      nrf_freq_resolution = (nrf_band == NRF905_BAND_433 ? 100000UL : 200000UL);
+      frequency -= (frequency % nrf_freq_resolution);
+    }
+
+    int state = radio_hoperf->setFrequency(frequency / 1000000.0);
+
+#if RADIOLIB_DEBUG_BASIC
+    if (state == RADIOLIB_ERR_INVALID_FREQUENCY) {
+      Serial.println(F("[RF69] Selected frequency is invalid for this module!"));
+      while (true) { delay(10); }
+    }
+#endif
+
+    sx1231_channel_prev = channel;
+    /* restart Rx upon a channel switch */
+    sx1231_receive_active = false;
+  }
+}
+
+static void sx1231_setup()
+{
+  int state;
+
+  SoC->SPI_begin();
+
+  uint32_t irq  = lmic_pins.busy == LMIC_UNUSED_PIN ?
+                  RADIOLIB_NC : lmic_pins.busy;
+
+  mod = new Module(lmic_pins.nss, irq, lmic_pins.rst, RADIOLIB_NC, RadioSPI);
+  radio_hoperf = new SX1231(mod);
+
+  switch (settings->rf_protocol)
+  {
+  case RF_PROTOCOL_OGNTP:
+    rl_protocol     = &ogntp_proto_desc;
+    protocol_encode = &ogntp_encode;
+    protocol_decode = &ogntp_decode;
+    break;
+  case RF_PROTOCOL_P3I:
+    rl_protocol     = &p3i_proto_desc;
+    protocol_encode = &p3i_encode;
+    protocol_decode = &p3i_decode;
+    break;
+#if defined(ENABLE_ADSL)
+  case RF_PROTOCOL_ADSL_860:
+    rl_protocol     = &adsl_proto_desc;
+    protocol_encode = &adsl_encode;
+    protocol_decode = &adsl_decode;
+    break;
+#endif /* ENABLE_ADSL */
+  case RF_PROTOCOL_LEGACY:
+  default:
+    rl_protocol     = &legacy_proto_desc;
+    protocol_encode = &legacy_encode;
+    protocol_decode = &legacy_decode;
+    /*
+     * Enforce legacy protocol setting for SX1231
+     * if other value (UAT) left in EEPROM from other (UATM) radio
+     */
+    settings->rf_protocol = RF_PROTOCOL_LEGACY;
+    break;
+  }
+
+  RF_FreqPlan.setPlan(settings->band, settings->rf_protocol);
+
+  float br, fdev, bw;
+
+#if RADIOLIB_DEBUG_BASIC
+  Serial.print(F("[RF69] Initializing ... "));
+#endif
+
+  state = radio_hoperf->begin(); // start FSK mode
+
+#if RADIOLIB_DEBUG_BASIC
+  if (state == RADIOLIB_ERR_NONE) {
+    Serial.println(F("success!"));
+  } else {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+    while (true) { delay(10); }
+  }
+#endif
+
+  switch (rl_protocol->bitrate)
+  {
+  case RF_BITRATE_38400:
+    br = 38.4;
+    break;
+  case RF_BITRATE_100KBPS:
+  default:
+    br = 100.0;
+    break;
+  }
+  state = radio_hoperf->setBitRate(br);
+
+#if RADIOLIB_DEBUG_BASIC
+  if (state == RADIOLIB_ERR_INVALID_BIT_RATE) {
+    Serial.println(F("[RF69] Selected bit rate is invalid for this module!"));
+    while (true) { delay(10); }
+  } else if (state == RADIOLIB_ERR_INVALID_BIT_RATE_BW_RATIO) {
+    Serial.println(F("[RF69] Selected bit rate to bandwidth ratio is invalid!"));
+    Serial.println(F("[RF69] Increase receiver bandwidth to set this bit rate."));
+    while (true) { delay(10); }
+  }
+#endif
+
+  switch (rl_protocol->deviation)
+  {
+  case RF_FREQUENCY_DEVIATION_9_6KHZ:
+    fdev = 9.6;
+    break;
+  case RF_FREQUENCY_DEVIATION_19_2KHZ:
+    fdev = 19.2;
+    break;
+  case RF_FREQUENCY_DEVIATION_25KHZ:
+    fdev = 25.0;
+    break;
+  case RF_FREQUENCY_DEVIATION_50KHZ:
+  case RF_FREQUENCY_DEVIATION_NONE:
+  default:
+    fdev = 50.0;
+    break;
+  }
+  state = radio_hoperf->setFrequencyDeviation(fdev);
+
+#if RADIOLIB_DEBUG_BASIC
+  if (state == RADIOLIB_ERR_INVALID_FREQUENCY_DEVIATION) {
+    Serial.println(F("[RF69] Selected frequency deviation is invalid for this module!"));
+    while (true) { delay(10); }
+  }
+#endif
+
+  switch (rl_protocol->bandwidth)
+  {
+  case RF_RX_BANDWIDTH_SS_50KHZ:
+    bw = 100.0;
+    break;
+  case RF_RX_BANDWIDTH_SS_62KHZ:
+    bw = 125.0;
+    break;
+  case RF_RX_BANDWIDTH_SS_100KHZ:
+    bw = 200.0;
+    break;
+  case RF_RX_BANDWIDTH_SS_166KHZ:
+    bw = 333.3;
+    break;
+  case RF_RX_BANDWIDTH_SS_200KHZ:
+    bw = 400.0;
+    break;
+  case RF_RX_BANDWIDTH_SS_250KHZ:
+  case RF_RX_BANDWIDTH_SS_1567KHZ:
+    bw = 500.0;
+    break;
+  case RF_RX_BANDWIDTH_SS_125KHZ:
+  default:
+    bw = 250.0;
+    break;
+  }
+  state = radio_hoperf->setRxBandwidth(bw);
+
+#if RADIOLIB_DEBUG_BASIC
+  if (state == RADIOLIB_ERR_INVALID_RX_BANDWIDTH) {
+    Serial.println(F("[RF69] Selected receiver bandwidth is invalid for this module!"));
+    while (true) { delay(10); }
+  } else if (state == RADIOLIB_ERR_INVALID_BIT_RATE_BW_RATIO) {
+    Serial.println(F("[RF69] Selected bit rate to bandwidth ratio is invalid!"));
+    Serial.println(F("[RF69] Decrease bit rate to set this receiver bandwidth."));
+    while (true) { delay(10); }
+  }
+#endif
+
+  state = radio_hoperf->setEncoding(RADIOLIB_ENCODING_NRZ);
+  state = radio_hoperf->setPreambleLength(rl_protocol->preamble_size * 8);
+  state = radio_hoperf->setDataShaping(RADIOLIB_SHAPING_0_5);
+
+  switch (rl_protocol->crc_type)
+  {
+  case RF_CHECKSUM_TYPE_CCITT_FFFF:
+  case RF_CHECKSUM_TYPE_CCITT_0000:
+  case RF_CHECKSUM_TYPE_CCITT_1D02:
+  case RF_CHECKSUM_TYPE_CRC8_107:
+  case RF_CHECKSUM_TYPE_RS:
+    /* CRC is driven by software */
+    state = radio_hoperf->setCrcFiltering(0);
+    break;
+  case RF_CHECKSUM_TYPE_GALLAGER:
+  case RF_CHECKSUM_TYPE_CRC_MODES:
+  case RF_CHECKSUM_TYPE_NONE:
+  default:
+    state = radio_hoperf->setCrcFiltering(0);
+    break;
+  }
+
+  size_t pkt_size = rl_protocol->payload_offset + rl_protocol->payload_size +
+                    rl_protocol->crc_size;
+
+  switch (rl_protocol->whitening)
+  {
+  case RF_WHITENING_MANCHESTER:
+    pkt_size += pkt_size;
+    break;
+  case RF_WHITENING_PN9:
+  case RF_WHITENING_NONE:
+  case RF_WHITENING_NICERF:
+  default:
+    break;
+  }
+  state = radio_hoperf->fixedPacketLengthMode(pkt_size);
+
+  state = radio_hoperf->disableAddressFiltering();
+
+  /* Work around premature P3I syncword detection */
+  if (rl_protocol->syncword_size == 2) {
+    uint8_t preamble = rl_protocol->preamble_type == RF_PREAMBLE_TYPE_AA ?
+                       0xAA : 0x55;
+    uint8_t sword[4] = { preamble,
+                         preamble,
+                         rl_protocol->syncword[0],
+                         rl_protocol->syncword[1]
+                       };
+    state = radio_hoperf->setSyncWord(sword, 4);
+  } else {
+    state = radio_hoperf->setSyncWord((uint8_t *) rl_protocol->syncword,
+                                      (size_t)    rl_protocol->syncword_size);
+  }
+
+#if RADIOLIB_DEBUG_BASIC
+  if (state == RADIOLIB_ERR_INVALID_SYNC_WORD) {
+    Serial.println(F("[RF69] Selected sync word is invalid for this module!"));
+    while (true) { delay(10); }
+  }
+#endif
+
+  float txpow;
+
+  switch(settings->txpower)
+  {
+  case RF_TX_POWER_FULL:
+
+    /* Load regional max. EIRP at first */
+    txpow = RF_FreqPlan.MaxTxPower;
+
+    if (txpow > 20)
+      txpow = 20;
+
+#if 1
+    /*
+     * Enforce Tx power limit until confirmation
+     * that SX1231 is doing well
+     * when antenna is not connected
+     */
+    if (txpow > 17)
+      txpow = 17;
+#endif
+    break;
+  case RF_TX_POWER_OFF:
+  case RF_TX_POWER_LOW:
+  default:
+    txpow = 2;
+    break;
+  }
+
+  bool highPower = (sx1231_chip_rev_cache == RADIOLIB_SX123X_CHIP_REVISION_2_D);
+  state = radio_hoperf->setOutputPower(txpow, highPower);
+
+#if RADIOLIB_DEBUG_BASIC
+  if (state == RADIOLIB_ERR_INVALID_OUTPUT_POWER) {
+    Serial.println(F("[RF69] Selected output power is invalid for this module!"));
+    while (true) { delay(10); }
+  }
+#endif
+
+  radio_hoperf->setPacketReceivedAction(sx1231_receive_handler);
+}
+
+static bool sx1231_receive()
+{
+  bool success = false;
+  int state;
+
+  if (settings->power_save & POWER_SAVE_NORECEIVE) {
+    return success;
+  }
+
+  if (!sx1231_receive_active) {
+
+    state = radio_hoperf->startReceive();
+    if (state == RADIOLIB_ERR_NONE) {
+      sx1231_receive_active = true;
+    }
+  }
+
+  if (sx1231_receive_complete == true) {
+
+    rxPacket.len = radio_hoperf->getPacketLength();
+
+    if (rxPacket.len > 0) {
+
+      if (rxPacket.len > sizeof(rxPacket.payload)) {
+        rxPacket.len = sizeof(rxPacket.payload);
+      }
+
+      state = radio_hoperf->readData(rxPacket.payload, rxPacket.len);
+      sx1231_receive_active = false;
+
+      if (state == RADIOLIB_ERR_NONE &&
+         !memeqzero(rxPacket.payload, rxPacket.len)) {
+        size_t size = 0;
+        uint8_t offset;
+
+        u1_t crc8, pkt_crc8;
+        u2_t crc16, pkt_crc16;
+
+        RadioLib_DataPacket *rxPacket_ptr = &rxPacket;
+
+        switch (rl_protocol->crc_type)
+        {
+        case RF_CHECKSUM_TYPE_GALLAGER:
+        case RF_CHECKSUM_TYPE_CRC_MODES:
+        case RF_CHECKSUM_TYPE_NONE:
+           /* crc16 left not initialized */
+          break;
+        case RF_CHECKSUM_TYPE_CRC8_107:
+          crc8 = 0x71;     /* seed value */
+          break;
+        case RF_CHECKSUM_TYPE_CCITT_0000:
+          crc16 = 0x0000;  /* seed value */
+          break;
+        case RF_CHECKSUM_TYPE_CCITT_FFFF:
+        default:
+          crc16 = 0xffff;  /* seed value */
+          break;
+        }
+
+        switch (rl_protocol->type)
+        {
+        case RF_PROTOCOL_LEGACY:
+          /* take in account NRF905/FLARM "address" bytes */
+          crc16 = update_crc_ccitt(crc16, 0x31);
+          crc16 = update_crc_ccitt(crc16, 0xFA);
+          crc16 = update_crc_ccitt(crc16, 0xB6);
+          break;
+        case RF_PROTOCOL_P3I:
+        case RF_PROTOCOL_OGNTP:
+        case RF_PROTOCOL_ADSL_860:
+        default:
+          break;
+        }
+
+        uint8_t i;
+
+        switch (rl_protocol->type)
+        {
+        case RF_PROTOCOL_P3I:
+          offset = rl_protocol->payload_offset;
+          for (i = 0; i < rl_protocol->payload_size; i++)
+          {
+            update_crc8(&crc8, (u1_t)(rxPacket_ptr->payload[i + offset]));
+            if (i < sizeof(RxBuffer)) {
+              RxBuffer[i] = rxPacket_ptr->payload[i + offset] ^
+                            pgm_read_byte(&whitening_pattern[i]);
+            }
+          }
+
+          pkt_crc8 = rxPacket_ptr->payload[i + offset];
+
+          if (crc8 == pkt_crc8) {
+            success = true;
+          }
+          break;
+        case RF_PROTOCOL_OGNTP:
+        case RF_PROTOCOL_ADSL_860:
+        case RF_PROTOCOL_LEGACY:
+        default:
+          offset = 0;
+          size   = rl_protocol->payload_offset +
+                   rl_protocol->payload_size +
+                   rl_protocol->payload_size +
+                   rl_protocol->crc_size +
+                   rl_protocol->crc_size;
+          if (rxPacket_ptr->len >= (size + offset)) {
+            uint8_t val1, val2;
+            for (i = 0; i < size; i++) {
+              val1 = pgm_read_byte(&ManchesterDecode[rxPacket_ptr->payload[i + offset]]);
+              i++;
+              val2 = pgm_read_byte(&ManchesterDecode[rxPacket_ptr->payload[i + offset]]);
+              if ((i>>1) < sizeof(RxBuffer)) {
+                RxBuffer[i>>1] = ((val1 & 0x0F) << 4) | (val2 & 0x0F);
+
+                if (i < size - (rl_protocol->crc_size + rl_protocol->crc_size)) {
+                  switch (rl_protocol->crc_type)
+                  {
+                  case RF_CHECKSUM_TYPE_GALLAGER:
+                  case RF_CHECKSUM_TYPE_CRC_MODES:
+                  case RF_CHECKSUM_TYPE_NONE:
+                    break;
+                  case RF_CHECKSUM_TYPE_CCITT_FFFF:
+                  case RF_CHECKSUM_TYPE_CCITT_0000:
+                  default:
+                    crc16 = update_crc_ccitt(crc16, (u1_t)(RxBuffer[i>>1]));
+                    break;
+                  }
+                }
+              }
+            }
+
+            size = size>>1;
+
+            switch (rl_protocol->crc_type)
+            {
+            case RF_CHECKSUM_TYPE_GALLAGER:
+              if (LDPC_Check((uint8_t  *) &RxBuffer[0]) == 0) {
+                success = true;
+              }
+              break;
+            case RF_CHECKSUM_TYPE_CRC_MODES:
+#if defined(ENABLE_ADSL)
+              if (ADSL_Packet::checkPI((uint8_t  *) &RxBuffer[0], size) == 0) {
+                success = true;
+              }
+#endif /* ENABLE_ADSL */
+              break;
+            case RF_CHECKSUM_TYPE_CCITT_FFFF:
+            case RF_CHECKSUM_TYPE_CCITT_0000:
+              offset = rl_protocol->payload_offset + rl_protocol->payload_size;
+              if (offset + 1 < sizeof(RxBuffer)) {
+                pkt_crc16 = (RxBuffer[offset] << 8 | RxBuffer[offset+1]);
+                if (crc16 == pkt_crc16) {
+
+                  success = true;
+                }
+              }
+              break;
+            default:
+              break;
+            }
+          }
+          break;
+        }
+
+        if (success) {
+          RF_last_rssi = radio_hoperf->getRSSI();
+          rx_packets_counter++;
+        }
+      }
+
+      memset(rxPacket.payload, 0, sizeof(rxPacket.payload));
+      rxPacket.len = 0;
+    }
+
+    sx1231_receive_complete = false;
+  }
+
+  return success;
+}
+
+static bool sx1231_transmit()
+{
+  u1_t crc8;
+  u2_t crc16;
+  u1_t i;
+
+  bool success = false;
+
+  if (RF_tx_size <= 0) {
+    return success;
+  }
+
+  sx1231_receive_active = false;
+  sx1231_transmit_complete = false;
+
+  size_t PayloadLen = 0;
+
+  switch (rl_protocol->crc_type)
+  {
+  case RF_CHECKSUM_TYPE_GALLAGER:
+  case RF_CHECKSUM_TYPE_CRC_MODES:
+  case RF_CHECKSUM_TYPE_NONE:
+     /* crc16 left not initialized */
+    break;
+  case RF_CHECKSUM_TYPE_CRC8_107:
+    crc8 = 0x71;     /* seed value */
+    break;
+  case RF_CHECKSUM_TYPE_CCITT_0000:
+    crc16 = 0x0000;  /* seed value */
+    break;
+  case RF_CHECKSUM_TYPE_CCITT_FFFF:
+  default:
+    crc16 = 0xffff;  /* seed value */
+    break;
+  }
+
+  switch (rl_protocol->type)
+  {
+  case RF_PROTOCOL_LEGACY:
+    /* take in account NRF905/FLARM "address" bytes */
+    crc16 = update_crc_ccitt(crc16, 0x31);
+    crc16 = update_crc_ccitt(crc16, 0xFA);
+    crc16 = update_crc_ccitt(crc16, 0xB6);
+    break;
+  case RF_PROTOCOL_P3I:
+    /* insert Net ID */
+    txPacket.payload[PayloadLen++] = (u1_t) ((rl_protocol->net_id >> 24) & 0x000000FF);
+    txPacket.payload[PayloadLen++] = (u1_t) ((rl_protocol->net_id >> 16) & 0x000000FF);
+    txPacket.payload[PayloadLen++] = (u1_t) ((rl_protocol->net_id >>  8) & 0x000000FF);
+    txPacket.payload[PayloadLen++] = (u1_t) ((rl_protocol->net_id >>  0) & 0x000000FF);
+    /* insert byte with payload size */
+    txPacket.payload[PayloadLen++] = rl_protocol->payload_size;
+
+    /* insert byte with CRC-8 seed value when necessary */
+    if (rl_protocol->crc_type == RF_CHECKSUM_TYPE_CRC8_107) {
+      txPacket.payload[PayloadLen++] = crc8;
+    }
+
+    break;
+  case RF_PROTOCOL_OGNTP:
+  case RF_PROTOCOL_ADSL_860:
+  default:
+    break;
+  }
+
+  for (i=0; i < RF_tx_size; i++) {
+
+    switch (rl_protocol->whitening)
+    {
+    case RF_WHITENING_NICERF:
+      txPacket.payload[PayloadLen] = TxBuffer[i] ^ pgm_read_byte(&whitening_pattern[i]);
+      break;
+    case RF_WHITENING_MANCHESTER:
+      txPacket.payload[PayloadLen] = pgm_read_byte(&ManchesterEncode[(TxBuffer[i] >> 4) & 0x0F]);
+      PayloadLen++;
+      txPacket.payload[PayloadLen] = pgm_read_byte(&ManchesterEncode[(TxBuffer[i]     ) & 0x0F]);
+      break;
+    case RF_WHITENING_NONE:
+    default:
+      txPacket.payload[PayloadLen] = TxBuffer[i];
+      break;
+    }
+
+    switch (rl_protocol->crc_type)
+    {
+    case RF_CHECKSUM_TYPE_GALLAGER:
+    case RF_CHECKSUM_TYPE_CRC_MODES:
+    case RF_CHECKSUM_TYPE_NONE:
+      break;
+    case RF_CHECKSUM_TYPE_CRC8_107:
+      update_crc8(&crc8, (u1_t)(txPacket.payload[PayloadLen]));
+      break;
+    case RF_CHECKSUM_TYPE_CCITT_FFFF:
+    case RF_CHECKSUM_TYPE_CCITT_0000:
+    default:
+      if (rl_protocol->whitening == RF_WHITENING_MANCHESTER) {
+        crc16 = update_crc_ccitt(crc16, (u1_t)(TxBuffer[i]));
+      } else {
+        crc16 = update_crc_ccitt(crc16, (u1_t)(txPacket.payload[PayloadLen]));
+      }
+      break;
+    }
+
+    PayloadLen++;
+  }
+
+  switch (rl_protocol->crc_type)
+  {
+  case RF_CHECKSUM_TYPE_GALLAGER:
+  case RF_CHECKSUM_TYPE_CRC_MODES:
+  case RF_CHECKSUM_TYPE_NONE:
+    break;
+  case RF_CHECKSUM_TYPE_CRC8_107:
+    txPacket.payload[PayloadLen++] = crc8;
+    break;
+  case RF_CHECKSUM_TYPE_CCITT_FFFF:
+  case RF_CHECKSUM_TYPE_CCITT_0000:
+  default:
+    if (rl_protocol->whitening == RF_WHITENING_MANCHESTER) {
+      txPacket.payload[PayloadLen++] = pgm_read_byte(&ManchesterEncode[(((crc16 >>  8) & 0xFF) >> 4) & 0x0F]);
+      txPacket.payload[PayloadLen++] = pgm_read_byte(&ManchesterEncode[(((crc16 >>  8) & 0xFF)     ) & 0x0F]);
+      txPacket.payload[PayloadLen++] = pgm_read_byte(&ManchesterEncode[(((crc16      ) & 0xFF) >> 4) & 0x0F]);
+      txPacket.payload[PayloadLen++] = pgm_read_byte(&ManchesterEncode[(((crc16      ) & 0xFF)     ) & 0x0F]);
+      PayloadLen++;
+    } else {
+      txPacket.payload[PayloadLen++] = (crc16 >>  8) & 0xFF;
+      txPacket.payload[PayloadLen++] = (crc16      ) & 0xFF;
+    }
+    break;
+  }
+
+  txPacket.len = PayloadLen;
+
+  int state = radio_hoperf->transmit((uint8_t *) &txPacket.payload, (size_t) txPacket.len);
+
+  if (state == RADIOLIB_ERR_NONE) {
+
+    success = true;
+
+    memset(txPacket.payload, 0, sizeof(txPacket.payload));
+
+#if RADIOLIB_DEBUG_BASIC
+    // the packet was successfully transmitted
+    Serial.println(F("success!"));
+
+  } else if (state == RADIOLIB_ERR_PACKET_TOO_LONG) {
+    // the supplied packet was longer than 256 bytes
+    Serial.println(F("too long!"));
+
+  } else if (state == RADIOLIB_ERR_TX_TIMEOUT) {
+    // timeout occured while transmitting packet
+    Serial.println(F("timeout!"));
+
+  } else {
+    // some other error occurred
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+#endif
+  }
+
+  return success;
+}
+
+static void sx1231_shutdown()
+{
+  int state = radio_hoperf->sleep();
+}
+#endif /* EXCLUDE_SX1231 */
+
+#if !defined(EXCLUDE_SI443X)
+
+static bool si4432_probe(void);
+static void si4432_setup(void);
+static void si4432_channel(int8_t);
+static bool si4432_receive(void);
+static bool si4432_transmit(void);
+static void si4432_shutdown(void);
+
+const rfchip_ops_t si4432_ops = {
+  RF_IC_SI4432,
+  "SI4432",
+  si4432_probe,
+  si4432_setup,
+  si4432_channel,
+  si4432_receive,
+  si4432_transmit,
+  si4432_shutdown
+};
+
+Si4432 *radio_silabs;
+
+static u1_t si4432_readReg (u1_t addr) {
+#if defined(USE_BASICMAC)
+    hal_spi_select(1);
+#else
+    hal_pin_nss(0);
+#endif
+    hal_spi(addr & 0x7F);
+    u1_t val = hal_spi(0x00);
+#if defined(USE_BASICMAC)
+    hal_spi_select(0);
+#else
+    hal_pin_nss(1);
+#endif
+    return val;
+}
+
+static bool si4432_probe()
+{
+  u1_t v, v_reset;
+
+  SoC->SPI_begin();
+
+  lmic_hal_init (nullptr);
+
+  // manually reset radio
+  hal_pin_rst(0); // drive RST pin low
+  hal_waitUntil(os_getTime()+ms2osticks(1)); // wait >100us
+
+  v_reset = si4432_readReg(RADIOLIB_SI443X_REG_DEVICE_VERSION);
+
+  hal_pin_rst(2); // configure RST pin floating!
+  hal_waitUntil(os_getTime()+ms2osticks(5)); // wait 5ms
+
+  v = si4432_readReg(RADIOLIB_SI443X_REG_DEVICE_VERSION);
+
+  pinMode(lmic_pins.nss, INPUT);
+  RadioSPI.end();
+
+  if (v == RADIOLIB_SI443X_DEVICE_VERSION) {
+
+    if (v_reset == RADIOLIB_SI443X_DEVICE_VERSION) {
+      RF_SX12XX_RST_is_connected = false;
+    }
+
+    return true;
+  } else {
+    return false;
+  }
+}
+
+static void si4432_channel(int8_t channel)
+{
+
+}
+
+static void si4432_setup()
+{
+  int state;
+
+  SoC->SPI_begin();
+
+  uint32_t irq  = lmic_pins.busy == LMIC_UNUSED_PIN ?
+                  RADIOLIB_NC : lmic_pins.busy;
+
+  mod = new Module(lmic_pins.nss, irq, lmic_pins.rst, RADIOLIB_NC, RadioSPI);
+  radio_silabs = new Si4432(mod);
+
+  switch (settings->rf_protocol)
+  {
+  case RF_PROTOCOL_OGNTP:
+    rl_protocol     = &ogntp_proto_desc;
+    protocol_encode = &ogntp_encode;
+    protocol_decode = &ogntp_decode;
+    break;
+  case RF_PROTOCOL_P3I:
+    rl_protocol     = &p3i_proto_desc;
+    protocol_encode = &p3i_encode;
+    protocol_decode = &p3i_decode;
+    break;
+#if defined(ENABLE_ADSL)
+  case RF_PROTOCOL_ADSL_860:
+    rl_protocol     = &adsl_proto_desc;
+    protocol_encode = &adsl_encode;
+    protocol_decode = &adsl_decode;
+    break;
+#endif /* ENABLE_ADSL */
+  case RF_PROTOCOL_LEGACY:
+  default:
+    rl_protocol     = &legacy_proto_desc;
+    protocol_encode = &legacy_encode;
+    protocol_decode = &legacy_decode;
+    /*
+     * Enforce legacy protocol setting for SX1231
+     * if other value (UAT) left in EEPROM from other (UATM) radio
+     */
+    settings->rf_protocol = RF_PROTOCOL_LEGACY;
+    break;
+  }
+
+  RF_FreqPlan.setPlan(settings->band, settings->rf_protocol);
+
+  float br, fdev, bw;
+
+#if RADIOLIB_DEBUG_BASIC
+  Serial.print(F("[RF69] Initializing ... "));
+#endif
+
+  state = radio_silabs->begin(); // start FSK mode
+
+#if RADIOLIB_DEBUG_BASIC
+  if (state == RADIOLIB_ERR_NONE) {
+    Serial.println(F("success!"));
+  } else {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+    while (true) { delay(10); }
+  }
+#endif
+
+}
+
+static bool si4432_receive()
+{
+  return false;
+}
+
+static bool si4432_transmit()
+{
+  return false;
+}
+
+static void si4432_shutdown()
+{
+  int state = radio_silabs->sleep();
+}
+#endif /* EXCLUDE_SI443X */
 
 #endif /* USE_RADIOLIB */

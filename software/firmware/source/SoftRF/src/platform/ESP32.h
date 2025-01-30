@@ -358,6 +358,23 @@ struct rst_info {
 #define USE_TFT
 #define USE_NMEA_CFG
 #define USE_BASICMAC
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+#define USE_RADIOLIB
+//#define EXCLUDE_LR11XX
+#define EXCLUDE_CC1101
+#define EXCLUDE_SI443X
+#define EXCLUDE_SX1231
+#elif defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
+#if ARDUINO_USB_CDC_ON_BOOT
+//#define USE_RADIOLIB
+#else
+#define USE_RADIOLIB
+#endif /* ARDUINO_USB_CDC_ON_BOOT */
+//#define EXCLUDE_LR11XX
+#define EXCLUDE_CC1101
+#define EXCLUDE_SI443X
+#define EXCLUDE_SX1231
+#endif /* S3 C3 C6 */
 
 #define USE_TIME_SLOTS
 
@@ -449,13 +466,6 @@ extern const USB_Device_List_t supported_USB_devices[];
 #undef ENABLE_PROL
 //#define USE_NIMBLE
 #define USE_ARDUINOBLE
-#if defined(CONFIG_IDF_TARGET_ESP32C6)
-#if ARDUINO_USB_CDC_ON_BOOT
-//#define USE_RADIOLIB
-#else
-#define USE_RADIOLIB
-#endif /* ARDUINO_USB_CDC_ON_BOOT */
-#endif /* C6 */
 #endif /* C2 || C6 || H2 */
 #endif /* SX || CX || H2 */
 #endif /* CONFIG_IDF_TARGET_ESP32 */
@@ -466,7 +476,6 @@ extern const USB_Device_List_t supported_USB_devices[];
 #define USE_SA8X8
 /* Experimental */
 #define ENABLE_REMOTE_ID
-#define USE_RADIOLIB
 //#define EXCLUDE_VOICE_MESSAGE
 //#define USE_ARDUINOBLE
 //#undef USE_BLE_MIDI
