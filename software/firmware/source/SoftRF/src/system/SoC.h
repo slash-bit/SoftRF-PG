@@ -99,6 +99,7 @@ enum
 	SOC_ESP32S3,
 	SOC_ESP32C2,
 	SOC_ESP32C3,
+	SOC_ESP32C5,
 	SOC_ESP32C6,
 	SOC_ESP32H2,
 	SOC_ESP32P4,
@@ -139,7 +140,8 @@ extern const SoC_ops_t STM32_ops;
 #if defined(__ASR6501__) || defined(ARDUINO_ARCH_ASR650X)
 extern const SoC_ops_t PSoC4_ops;
 #endif
-#if defined(ARDUINO_ARCH_NRF52) || defined(ARDUINO_ARCH_NRF52840)
+#if defined(ARDUINO_ARCH_NRF52) || defined(ARDUINO_ARCH_NRF52840) || \
+   (defined(ARDUINO_ARCH_ZEPHYR) && defined(NRF52840_XXAA))
 extern const SoC_ops_t nRF52_ops;
 #endif
 #if defined(HACKRF_ONE)
