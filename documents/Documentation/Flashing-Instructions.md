@@ -1,11 +1,30 @@
-SenseCap T1000E Firmware flashing instructions.
-In order to flash T1000E it needs to be plugged in ot PC via USB cable and entered into DFU mode.
-After USB cable to your PC, press and hold the device button, then quickly connect the charging cable twice, (double flick) 
-the green LED will be solid, see blow how to perform this.<br><br>
-
-![68747470733a2f2f66696c65732e736565656473747564696f2e636f6d2f77696b692f53656e73654341502f4d6573687461737469632f6466752d6d6f6465322e676966](https://github.com/user-attachments/assets/c1a4794d-bfb5-46f1-a8e9-a58319fe1953)<br>
-Once the device in DFU mode, a disk drive called  "T1000-E" will pop up.
-Drag the dowloaded firmware file and drp it into that space.<br>
-<img width="290" alt="image" src="https://github.com/user-attachments/assets/99fa836a-365b-4166-87b2-2905cc2ebe9b"> /<br>
-After the file copied, this window will close.
-The T1000E will update and shutdown. Power on the device by single press the button.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SenseCap T1000E Firmware Flashing Instructions</title>
+</head>
+<body>
+    <h1>SenseCap T1000E Firmware Flashing Instructions</h1>
+    <p>To flash the T1000E, follow these steps:</p>
+    <ul>
+        <li>Connect the T1000E to your PC using a USB cable.</li>
+        <li>Put the device into <strong>DFU mode</strong>:
+            <ul>
+                <li>Press and hold the device button.</li>
+                <li>Quickly connect the charging cable <strong>twice</strong> (double flick).</li>
+                <li>The green LED will turn solid. See the animation below for guidance:</li>
+            </ul>
+            <img src="https://github.com/user-attachments/assets/c1a4794d-bfb5-46f1-a8e9-a58319fe1953" alt="DFU Mode Guide" style="width: 100%; max-width: 600px;">
+        </li>
+        <li>Once the device is in DFU mode, a disk drive named <strong>"T1000-E"</strong> will appear on your PC.</li>
+        <li>Drag and drop the downloaded firmware file into this drive:
+            <img src="https://github.com/user-attachments/assets/99fa836a-365b-4166-87b2-2905cc2ebe9b" alt="Firmware Drag and Drop" style="width: 290px;">
+        </li>
+        <li>Once the file is copied, the window will automatically close.</li>
+        <li>The T1000E will update and shut down.</li>
+        <li>Power on the device by pressing the button once.</li>
+    </ul>
+</body>
+</html>
