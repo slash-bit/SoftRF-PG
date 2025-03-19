@@ -18,8 +18,6 @@
                 <li>The green LED will turn solid. See the animation below for guidance:</li>
             </ul>
             ![T1000E_Double_Flick](https://github.com/user-attachments/assets/78301873-671b-444d-8780-5e28b84568eb)
-
-        </li>
         <li>Once the device is in DFU mode, a disk drive named <strong>"T1000-E"</strong> will appear on your PC.</li>
         <li>Drag and drop the downloaded firmware file into this drive:
             <img src="https://github.com/user-attachments/assets/99fa836a-365b-4166-87b2-2905cc2ebe9b" alt="Firmware Drag and Drop" style="width: 290px;">
