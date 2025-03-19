@@ -1,5 +1,6 @@
-SenseCap T1000E Card Operating Instructions
+# SenseCap T1000E Card Operating Instructions
 
 When you first power on after update . The Card will come up and LED should be solid green.
 It will be running in FANET mode and aircraft type is preset to Paraglider. 
 The soldi green LED means , the battery power is good and the device is NOT airborne.
+    ![T1000E-Slow_blink](https://github.com/user-attachments/assets/8aef998f-62ef-4440-86e1-af858b39ee56)  ![T1000E-Fast_blink](https://github.com/user-attachments/assets/e601487d-d809-4aa8-8bf0-f730aaba7fc2)
