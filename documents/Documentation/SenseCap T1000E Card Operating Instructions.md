@@ -7,11 +7,12 @@ The solid green LED means the battery power is good, and the device is **NOT air
 ---
 
 <div align="center">
-    <img src="https://github.com/user-attachments/assets/8aef998f-62ef-4440-86e1-af858b39ee56" alt="T1000E Slow Blink" width="600">
+    <img src="https://github.com/user-attachments/assets/805c77c1-5a17-4edd-8418-4d43c42f9316" alt="T1000E Slow Blink" width="150">
     <br>
     **Slow Blink** - Airborne mode
     <br><br>
-    <img src="https://github.com/user-attachments/assets/e601487d-d809-4aa8-8bf0-f730aaba7fc2" alt="T1000E Fast Blink" width="600">
+    <img src="https://github.com/user-attachments/assets/c8fbd4fc-2993-480c-b4fa-3c7f59389ab7" alt="T1000E Fast Blink" width="150">
     <br>
     **Fast Blink** - Low Battery
 </div>
+
