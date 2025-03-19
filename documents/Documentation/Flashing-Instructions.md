@@ -17,7 +17,8 @@
                 <li>Quickly connect the charging cable <strong>twice</strong> (double flick).</li>
                 <li>The green LED will turn solid. See the animation below for guidance:</li>
             </ul>
-            ![Double_Flick](https://github.com/user-attachments/assets/7444c4e4-5847-4d05-a115-92a6ee594400)
+            ![T1000E_Double_Flick](https://github.com/user-attachments/assets/78301873-671b-444d-8780-5e28b84568eb)
+
         </li>
         <li>Once the device is in DFU mode, a disk drive named <strong>"T1000-E"</strong> will appear on your PC.</li>
         <li>Drag and drop the downloaded firmware file into this drive:
