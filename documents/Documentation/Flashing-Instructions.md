@@ -9,6 +9,7 @@
     <h1>SenseCap T1000E Firmware Flashing Instructions</h1>
     <p>To flash the T1000E, follow these steps:</p>
     <ul>
+        <li>First, power On the T1000E.</li>
         <li>Connect the T1000E to your PC using a USB cable.</li>
         <li>Put the device into <strong>DFU mode</strong>:
             <ul>
@@ -16,7 +17,7 @@
                 <li>Quickly connect the charging cable <strong>twice</strong> (double flick).</li>
                 <li>The green LED will turn solid. See the animation below for guidance:</li>
             </ul>
-            <img src="https://github.com/user-attachments/assets/c1a4794d-bfb5-46f1-a8e9-a58319fe1953" alt="DFU Mode Guide" style="width: 100%; max-width: 600px;">
+            ![Double_Flick](https://github.com/user-attachments/assets/7444c4e4-5847-4d05-a115-92a6ee594400)
         </li>
         <li>Once the device is in DFU mode, a disk drive named <strong>"T1000-E"</strong> will appear on your PC.</li>
         <li>Drag and drop the downloaded firmware file into this drive:
