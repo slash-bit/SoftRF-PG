@@ -2,9 +2,9 @@
 
 To flash the T1000E, follow these steps:
 
-1. **First, power on the T1000E.**
-2. **Connect the T1000E to your PC using a USB cable.**
-3. **Put the device into DFU mode:**
+1. **First, Connect the T1000E to your PC using a USB cable.**
+2. **Power on the T1000E.**
+3. **As soon as LED light comes on , attempt to put the device into DFU mode:**
    - Press and hold the device button.
    - Quickly connect the charging cable **twice** (double flick).
    - The green LED will turn solid. See the animation below for guidance:
