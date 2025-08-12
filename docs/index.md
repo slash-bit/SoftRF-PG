@@ -29,9 +29,9 @@ You have come to the right place! Follow these instructions carefully.
 
 ---
 
-1. **Download the Bootloader Flasher utility**: Ensure you have the latest bootloader file for the T1000E SenseCap.
+1. **Download the Bootloader Flasher utility**: Ensure you have the latest bootloader file for the T1000E SenseCap called "bootloader_flasher.exe"
 
-<a href="https://github.com/slash-bit/SoftRF-PG/blob/5db81d402305bba09452b6f20d2c40bc0ccb5ed8/software/utils/T1000E_Flash_Bootloader/bootloader_flasher.exe"
+<a href="https://github.com/slash-bit/SoftRF-PG/releases/tag/v1.0"
    class="btn btn-primary"
    onclick="trackDownload('Bootloader Flasher Utility')">
    Download Bootloader Flasher Utility
@@ -52,7 +52,7 @@ If you like the work that I have been doing, you can
 
 ## Install the SoftRF firmware
 
-<a href="https://github.com/slash-bit/SoftRF-PG/blob/master/software/firmware/binaries/nRF52-CARD/SoftRF-firmware-Card_T1000E-1.7-a827d2-VB007-prd.uf2"
+<a href="https://github.com/slash-bit/SoftRF-PG/releases/tag/v007"
    class="btn btn-primary"
    onclick="trackDownload('SoftRF Firmware T1000E')">
    Download the latest SoftRF firmware for T1000E SenseCap
