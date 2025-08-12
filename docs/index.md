@@ -2,6 +2,7 @@
 layout: default
 title: T1000E SenseCap Setup
 ---
+<link rel="stylesheet" href="assets/css/style.css">
 
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2BLMJBJ0TN"></script>
@@ -61,8 +62,8 @@ If you like the work that I have been doing, you can
 3. Enter DFU mode by pressing & holding the button, quickly connecting the charging cable **twice**.  
 4. Copy the firmware `.uf2` file to the `T1000-E` drive.  
 
-![Firmware Drag and Drop](https://github.com/user-attachments/assets/99fa836a-365b-4166-87b2-2905cc2ebe9b)
+![Firmware Drag and Drop](/images/t1000e-drive.png)
 
 ---
 
-[**SenseCap T1000E Card Operating Instructions**](https://github.com/slash-bit/SoftRF-PG/blob/master/documents/Documentation/SenseCap%20T1000E%20Card%20Operating%20Instructions.md) — Learn more about device features, beep codes, and usage tips.
+[**SenseCap T1000E Card Operating Instructions**](https://github.com/slash-bit/SoftRF-PG/blob/master/documents/Documentation/SenseCap%20T1000E%20Card%20Operating%20Instructions.md) {: .btn .btn-primary } — Learn more about device features, beep codes, and usage tips.
