@@ -3,7 +3,7 @@ layout: default
 title: T1000E SenseCap Setup
 ---
 
-<link rel="stylesheet" href="assets/css/buttons.css">
+<link rel="stylesheet" href="/SoftRF-PG/assets/css/buttons.css">
 
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-2BLMJBJ0TN"></script>
