@@ -25,8 +25,9 @@ You have come to the right place! Follow these instructions carefully.
 
 <!-- Bootloader Flasher download with tracking -->
 <a href="https://github.com/slash-bit/SoftRF-PG/blob/5db81d402305bba09452b6f20d2c40bc0ccb5ed8/software/utils/T1000E_Flash_Bootloader/bootloader_flasher.exe"
+    class="btn btn-primary" 
    onclick="trackDownload('Bootloader Flasher Utility')">
-   **⬇ Download Bootloader Flasher Utility**
+   **Download Bootloader Flasher Utility**
 </a>
 
 2. **Connect your T1000E SenseCap**: Use a USB cable to connect your device to your computer.  
@@ -43,8 +44,9 @@ If you like the work that I have been doing, you can
 
 <!-- Firmware download with tracking -->
 <a href="https://github.com/slash-bit/SoftRF-PG/blob/master/software/firmware/binaries/nRF52-CARD/SoftRF-firmware-Card_T1000E-1.7-a827d2-VB007-prd.uf2"
+class="btn btn-primary"
    onclick="trackDownload('SoftRF Firmware T1000E')">
-   **⬇ Download the latest SoftRF firmware for T1000E SenseCap**
+   **Download the latest SoftRF firmware for T1000E SenseCap**
 </a>
 
 1. With device powered off, connect the T1000E to your PC via USB.  
@@ -52,9 +54,8 @@ If you like the work that I have been doing, you can
 3. Enter DFU mode by pressing & holding the button, quickly connecting the charging cable **twice**.  
 4. Copy the firmware `.uf2` file to the `T1000-E` drive.  
 
-![Firmware Drag and Drop](https://github.com/user-attachments/assets/99fa836a-365b-4166-87b2-2905cc2ebe9b)
+![Firmware Drag and Drop](images/t1000e-drive.png)
 
 ---
 
-[**SenseCap T1000E Card Operating Instructions**](https://github.com/slash-bit/SoftRF-PG/blob/master/documents/Documentation/SenseCap%20T1000E%20Card%20Operating%20Instructions.md) — Learn more about device features, beep codes, and usage tips.
-
+[**SenseCap T1000E Card Operating Instructions**](https://github.com/slash-bit/SoftRF-PG/blob/master/documents/Documentation/SenseCap%20T1000E%20Card%20Operating%20Instructions.md){: .btn .btn-primary } — Learn more about device features, beep codes, and usage tips.
