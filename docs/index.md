@@ -68,3 +68,44 @@ If you like the work that I have been doing, you can
 ---
 
 [**SenseCap T1000E Card Operating Instructions**](https://github.com/slash-bit/SoftRF-PG/blob/master/documents/Documentation/SenseCap%20T1000E%20Card%20Operating%20Instructions.md) {: .btn .btn-primary } — Learn more about device features, beep codes, and usage tips.
+
+<style>
+  #bmc-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #FF813F;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 50px;
+    font-weight: bold;
+    font-size: 16px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    cursor: pointer;
+    z-index: 1000;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #bmc-widget:hover {
+    background: #e37428;
+    text-decoration: none;
+  }
+  #bmc-widget svg {
+    width: 24px;
+    height: 24px;
+  }
+</style>
+
+<a id="bmc-widget" href="https://ko-fi.com/vladbelayev" target="_blank" rel="noopener noreferrer">
+  ☕ Buy me a coffee
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+       stroke-linecap="round" stroke-linejoin="round" class="feather feather-coffee">
+    <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"></path>
+    <line x1="6" y1="1" x2="6" y2="4"></line>
+    <line x1="10" y1="1" x2="10" y2="4"></line>
+    <line x1="14" y1="1" x2="14" y2="4"></line>
+  </svg>
+</a>
