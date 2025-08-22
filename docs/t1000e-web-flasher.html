@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>T1000-E Serial Web Flasher (Web Serial)</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:20px;background:#0b1220;color:#e6eefc}
+    .panel{max-width:980px;margin:0 auto;background:#121a2b;padding:20px;border-radius:12px;border:1px solid #233153}
+    h1{margin:0 0 8px}
+    p.lead{color:#8aa0c7}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+    button{background:#16274a;border:1px solid #29406d;color:#e6eefc;padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+    .log{background:#0c152b;border:1px solid #1e2e56;padding:10px;border-radius:8px;height:260px;overflow:auto;font-family:monospace;font-size:13px}
+    .fileinfo{color:#8aa0c7}
+    .small{font-size:13px;color:#8aa0c7}
+    label.input{display:inline-block;padding:8px 12px;border-radius:8px;background:#0f1930;border:1px dashed #29406d;cursor:pointer}
+    input[type=file]{display:none}
+    .progress{height:10px;background:#102040;border-radius:8px;overflow:hidden;border:1px solid #203259;margin-top:8px}
+    .bar{height:100%;width:0;background:linear-gradient(90deg,#3f80ff,#88b3ff);transition:width .1s}
+    a{color:#66a3ff}
+    .note{color:#a8c0e6;font-size:13px}
+    .links{margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>🔧 T1000-E Serial Web Flasher (Web Serial)</h1>
+    <p class="lead">This page downloads the bootloader and firmware from the URLs you provided, triggers the device to enter DFU mode (1200-baud "touch") and opens a serial connection. <strong>Full Nordic/Adafruit serial DFU transfer is not automatically implemented in the browser</strong> — see notes below and the TODOs in the code. This page provides a working, audited skeleton you can extend to implement the serial DFU packet/state machine in JavaScript, or to forward files to a native helper.</p>
+
+    <div class="row">
+      <button id="btnFetchBoot">Fetch Bootloader (.zip)</button>
+      <button id="btnFetchFW">Fetch Firmware (.uf2)</button>
+      <span class="fileinfo" id="bootInfo">bootloader: —</span>
+      <span class="fileinfo" id="fwInfo">firmware: —</span>
+    </div>
+
+    <div class="row">
+      <button id="btnSelectPort">Select COM Port</button>
+      <button id="btnTouch" disabled>1200 touch (enter DFU)</button>
+      <button id="btnOpenSerial" disabled>Open Serial (115200)</button>
+      <button id="btnFlashBoot" disabled>Flash Bootloader (placeholder)</button>
+      <button id="btnFlashFW" disabled>Flash Firmware (placeholder)</button>
+      <button id="btnAbort" disabled>Abort</button>
+    </div>
+
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <p class="small" id="status">Status: idle</p>
+
+    <div class="log" id="log"></div>
+
+    <p class="note">Notes: Browser Web Serial can open COM ports and send/receive bytes, but implementing the full Adafruit/nRF serial DFU protocol requires porting that protocol into JavaScript. If you prefer a simpler route, run the local native flasher (adafruit-nrfutil) and use a small local helper to accept the uploaded files from this page.</p>
+
+    <div class="links small">
+      <div>Bootloader URL: <a href="https://github.com/lyusupov/Adafruit_nRF52_Bootloader/releases/download/0.9.2/t1000_e_bootloader-0.9.2_s140_6.1.1.zip" target="_blank">t1000_e_bootloader-0.9.2_s140_6.1.1.zip</a></div>
+      <div>Firmware URL: <a href="https://github.com/slash-bit/SoftRF-PG/releases/download/v007/SoftRF-firmware-Card_T1000E-1.7-a827d2-VB007-prd.uf2" target="_blank">SoftRF-firmware-...uf2</a></div>
+    </div>
+  </div>
+
+<script>
+// Serial DFU Web skeleton
+const BOOT_URL = 'https://github.com/lyusupov/Adafruit_nRF52_Bootloader/releases/download/0.9.2/t1000_e_bootloader-0.9.2_s140_6.1.1.zip';
+const FW_URL   = 'https://github.com/slash-bit/SoftRF-PG/releases/download/v007/SoftRF-firmware-Card_T1000E-1.7-a827d2-VB007-prd.uf2';
+
+const ui = {
+  btnFetchBoot: document.getElementById('btnFetchBoot'),
+  btnFetchFW: document.getElementById('btnFetchFW'),
+  bootInfo: document.getElementById('bootInfo'),
+  fwInfo: document.getElementById('fwInfo'),
+  btnSelectPort: document.getElementById('btnSelectPort'),
+  btnTouch: document.getElementById('btnTouch'),
+  btnOpenSerial: document.getElementById('btnOpenSerial'),
+  btnFlashBoot: document.getElementById('btnFlashBoot'),
+  btnFlashFW: document.getElementById('btnFlashFW'),
+  btnAbort: document.getElementById('btnAbort'),
+  log: document.getElementById('log'),
+  status: document.getElementById('status'),
+  bar: document.getElementById('bar')
+};
+
+let bootData = null; // ArrayBuffer for bootloader .zip
+let fwData = null;   // ArrayBuffer for uf2
+let port = null;
+let reader = null;
+let writer = null;
+let aborting = false;
+
+function log(msg) {
+  const t = new Date().toLocaleTimeString();
+  ui.log.insertAdjacentHTML('beforeend', `<div>[${t}] ${msg}</div>`);
+  ui.log.scrollTop = ui.log.scrollHeight;
+}
+function setStatus(s) { ui.status.textContent = 'Status: ' + s; }
+function setProgress(p) { ui.bar.style.width = Math.max(0, Math.min(1,p))*100 + '%'; }
+
+// Fetch helpers
+async function fetchAsArrayBuffer(url) {
+  log('Fetching: ' + url);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Fetch failed: ' + r.status);
+  const buf = await r.arrayBuffer();
+  log(`Fetched ${buf.byteLength} bytes`);
+  return buf;
+}
+
+ui.btnFetchBoot.addEventListener('click', async () => {
+  try {
+    ui.btnFetchBoot.disabled = true;
+    bootData = await fetchAsArrayBuffer(BOOT_URL);
+    ui.bootInfo.textContent = `bootloader: loaded (${bootData.byteLength} bytes)`;
+  } catch (e) {
+    log('Error fetching bootloader: ' + e);
+    ui.bootInfo.textContent = 'bootloader: error';
+  } finally { ui.btnFetchBoot.disabled = false; }
+});
+
+ui.btnFetchFW.addEventListener('click', async () => {
+  try {
+    ui.btnFetchFW.disabled = true;
+    fwData = await fetchAsArrayBuffer(FW_URL);
+    ui.fwInfo.textContent = `firmware: loaded (${fwData.byteLength} bytes)`;
+  } catch (e) {
+    log('Error fetching firmware: ' + e);
+    ui.fwInfo.textContent = 'firmware: error';
+  } finally { ui.btnFetchFW.disabled = false; }
+});
+
+// Select COM port
+ui.btnSelectPort.addEventListener('click', async () => {
+  try {
+    port = await navigator.serial.requestPort();
+    log('Port selected');
+    ui.btnTouch.disabled = false;
+    ui.btnOpenSerial.disabled = false;
+  } catch (e) {
+    log('Port selection cancelled or failed: ' + e);
+  }
+});
+
+// 1200 touch: open at 1200 then close to force DFU
+ui.btnTouch.addEventListener('click', async () => {
+  if (!port) return log('No port selected');
+  try {
+    setStatus('Touching 1200 to enter DFU...');
+    await port.open({ baudRate: 1200 });
+    log('Opened at 1200');
+    await new Promise(r => setTimeout(r, 300));
+    await port.close();
+    log('Closed port after touch. Device should reboot into DFU.');
+  } catch (e) {
+    log('Touch failed: ' + e);
+  } finally { setStatus('idle'); }
+});
+
+// Open serial at 115200 and get reader/writer
+ui.btnOpenSerial.addEventListener('click', async () => {
+  if (!port) return log('No port selected');
+  try {
+    await port.open({ baudRate: 115200, dataBits:8, stopBits:1, parity:'none' });
+    log('Port opened at 115200');
+    writer = port.writable.getWriter();
+    reader = port.readable.getReader();
+    ui.btnFlashBoot.disabled = false;
+    ui.btnFlashFW.disabled = false;
+    ui.btnAbort.disabled = false;
+    // Start a simple read loop to log device bytes (non-blocking)
+    readLoop();
+  } catch (e) { log('Open failed: ' + e); }
+});
+
+async function readLoop(){
+  try{
+    while(true){
+      const {value, done} = await reader.read();
+      if(done) break;
+      if(value) log('IN: ' + Array.from(value).map(b=>b.toString(16).padStart(2,'0')).join(' '));
+      if(aborting) break;
+    }
+  }catch(e){ log('Read error: ' + e); }
+}
+
+// Placeholder: flash bootloader by sending raw file bytes (NOT the real DFU protocol)
+ui.btnFlashBoot.addEventListener('click', async () => {
+  if (!bootData) return log('Bootloader not loaded');
+  if (!writer) return log('Serial not open');
+  log('Starting placeholder bootloader transfer (raw send). This is NOT the serial DFU protocol.');
+  setStatus('Flashing bootloader (raw)');
+  try{
+    const chunkSize = 512;
+    const view = new Uint8Array(bootData);
+    for(let i=0;i<view.length;i+=chunkSize){
+      if(aborting) throw new Error('Aborted');
+      const chunk = view.subarray(i, i+chunkSize);
+      await writer.write(chunk);
+      setProgress(i/view.length);
+      log(`Sent ${i+chunk.length}/${view.length}`);
+      await new Promise(r=>setTimeout(r,20)); // give device a moment
+    }
+    setProgress(1);
+    log('Bootloader raw transfer finished (device may not accept this).');
+  }catch(e){ log('Bootloader transfer error: ' + e); }
+  finally{ setStatus('idle'); }
+});
+
+// Placeholder: flash firmware by sending raw uf2 bytes (NOT the real DFU protocol)
+ui.btnFlashFW.addEventListener('click', async () => {
+  if (!fwData) return log('Firmware not loaded');
+  if (!writer) return log('Serial not open');
+  log('Starting placeholder firmware transfer (raw send). This is NOT the serial DFU protocol.');
+  setStatus('Flashing firmware (raw)');
+  try{
+    const chunkSize = 512;
+    const view = new Uint8Array(fwData);
+    for(let i=0;i<view.length;i+=chunkSize){
+      if(aborting) throw new Error('Aborted');
+      const chunk = view.subarray(i, i+chunkSize);
+      await writer.write(chunk);
+      setProgress(i/view.length);
+      log(`Sent ${i+chunk.length}/${view.length}`);
+      await new Promise(r=>setTimeout(r,10));
+    }
+    setProgress(1);
+    log('Firmware raw transfer finished (device may not accept this).');
+  }catch(e){ log('Firmware transfer error: ' + e); }
+  finally{ setStatus('idle'); }
+});
+
+ui.btnAbort.addEventListener('click', async () => {
+  aborting = true; setStatus('Aborting...');
+  try{ if (reader) { await reader.cancel(); reader.releaseLock(); reader = null; } }catch(e){}
+  try{ if (writer) { writer.releaseLock(); writer = null; } }catch(e){}
+  try{ if (port && port.readable) { await port.close(); log('Port closed'); } }catch(e){}
+  setStatus('idle'); ui.btnAbort.disabled = true; aborting = false; setProgress(0);
+});
+
+// Graceful cleanup on page unload
+window.addEventListener('beforeunload', async () => {
+  try{ if (reader) await reader.cancel(); }catch(e){}
+  try{ if (writer) writer.releaseLock(); }catch(e){}
+  try{ if (port && port.readable) await port.close(); }catch(e){}
+});
+
+// Initial log
+log('Serial DFU skeleton loaded. Click Fetch Bootloader and Firmware, then select a COM port.');
+log('IMPORTANT: The page currently does raw sends. To perform real serial DFU, the DFU protocol must be implemented or use a native helper (adafruit-nrfutil).');
+</script>
+</body>
+</html>
