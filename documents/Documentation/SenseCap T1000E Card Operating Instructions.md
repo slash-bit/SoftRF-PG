@@ -1,17 +1,14 @@
 # SenseCap T1000E Card Operating Instructions
 
-When you first power on after the update, the card will start in its default configuration, operating in **FANET mode** with the aircraft type preset to **Paraglider**.  
-A solid green LED indicates that the battery power is good and the device is **NOT airborne**.
+When you first power on the device, the LED will be solid green 
+which indicates that the battery power is good and the device is **NOT airborne**.
+The device will beep according to the battery charge level (see below). After battery beeps you will hear Operating Mode indication beeps.
 
 ---
 
 ### LED and Beep Indicators
 
-#### Airborne Mode
-<div style="display: flex; align-items: center; margin-bottom: 20px;">
-    <img src="https://github.com/user-attachments/assets/805c77c1-5a17-4edd-8418-4d43c42f9316" alt="T1000E Slow Blink" width="150" style="margin-right: 10px;">
-    <span><strong>Slow Blink</strong> - Indicates the device is in airborne mode.</span>
-</div>
+
 
 #### Battery Charge Status
 After switching the device on, the battery charge status is indicated by a sequence of short beeps:
@@ -24,6 +21,19 @@ After switching the device on, the battery charge status is indicated by a seque
 
 If the battery is less than 15% charged, you will hear a constant beep for one second after switching the device on.  
 A **LOW** battery charge level is also indicated by a rapidly flashing LED.
+
+#### Radio Mode
+
+This device suports three protocols LEGACY (FLARM), FANET and ADS-L. The selected protocol is indicated by the following beep sequences after the battery charge beeps:
+- **Two long tones: FLARM mode.**
+- **Two short tones: FANET mode.**
+- **One longer tone: ADS-L mode.**
+
+#### When Airborne
+<div style="display: flex; align-items: center; margin-bottom: 20px;">
+    <img src="https://github.com/user-attachments/assets/805c77c1-5a17-4edd-8418-4d43c42f9316" alt="T1000E Slow Blink" width="150" style="margin-right: 10px;">
+    <span><strong>Slow Blink</strong> - Indicates the device is in airborne mode.</span>
+</div>
 
 ---
 
@@ -64,10 +74,13 @@ Additional settings can be modified in the `settings.json` file. Follow these st
   "protocol": "FANET",
   "band": "EU",
   "aircraft_type": "PARAGLIDER",
-  "aircraft_id": "000000",
-  "alarm": "DISTANCE",
+  "aircraft_id": "4E3D2A",
+  "alarm": "VECTOR",
+  "alarm_filter": "PG",
   "txpower": "FULL",
-  "volume": "FULL"
+  "volume": "FULL",
+  "ignore_id": "201077",
+  "sw_version": "SoftRF-1.7-VB007-prod"
 }
 ```
 
@@ -77,16 +90,23 @@ Additional settings can be modified in the `settings.json` file. Follow these st
 - `"band"`: Region-specific options such as `"EU"`, `"US"`, `"AU"`, `"NZ"`, `"CN"`, etc.  
 - `"aircraft_type"`: Options include `"PARAGLIDER"`, `"GLIDER"`, `"HANGGLIDER"`.  
 - `"aircraft_id"`: Default is `"000000"`. You can set a 6-character hex ID.  
-- `"alarm"`: `"DISTANCE"` for distance-based alerts or `"VECTOR"` for collision-course alerts.  
+- `"alarm"`: `"DISTANCE"` for distance-based alerts or `"VECTOR"` for collision-course alerts.
+- `"alarm_filter"`: `"PG"` to filter alarms for paragliders. Or `"NONE"` for no filtering.
 - `"txpower"`: Options are `"FULL"`, `"LOW"`, or `"OFF"`.  
 - `"volume"`:  
-  - `"FULL"`: Buzzes for any aircraft in proximity.  
-  - `"LOW"`: Buzzes only for gliders, helicopters, or non-paraglider traffic.  
-  - `"OFF"`: Disables the buzzer.  
+  - `"FULL"`: High volume.  
+  - `"LOW"`: Lower volume.  
+  - `"OFF"`: Disables the buzzer.
+- `"ignore_id"`: Default is `"000000"`. You can set a 6-character hex ID to ignore specific device, For exmple if you have two devices running side by side
+- `"sw_version"`: Currently installed firmware version. Do not change this value.
 
-After making changes, save the file and overwrite the existing one. A backup will be created as `settings_bac.json` in case you need to revert.
+After making changes, save the file and overwrite the existing one. Now, power off the SenseCap device by long pressing the button.  And then power it back on to apply the new settings.
 
 ---
 
-### Final Steps
-After saving the changes, power off and power on the device to apply the new settings.
+### Registering you ID with databases
+Use you aircraft ID generated in the settings file to register your aircraft ID with OGN or Puretrac databases, visit the following links:
+- [OGN Registration](https://ddb.glidernet.org/)
+- [Puretrack Registration](https://puretrack.io/)
+
+
