@@ -35,7 +35,7 @@ First, download both files you'll need for the complete setup:
 
 ### 1.1 Download Bootloader Flasher Utility
 
-<a href="https://github.com/slash-bit/SoftRF-PG/releases/download/v2.0/bootloader_flasher_v2.exe"
+<a href="[https://github.com/slash-bit/SoftRF-PG/releases/download/v2.0/bootloader_flasher_v2.exe](https://github.com/slash-bit/SoftRF-PG/blob/master/docs/assets/binaries/bootloader_flasher_v3.exe)"
    class="btn btn-primary"
    onclick="trackDownload('Bootloader Flasher Utility')">
    📥 Download Bootloader Flasher Utility
